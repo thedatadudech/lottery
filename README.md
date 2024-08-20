@@ -1,4 +1,4 @@
-# <img src="app/assets/solanaLogo.png" alt="Folder Structure" width="250" height="50"> <hr>Bootcamp Lottery Project
+# <img src="app/assets/solanaLogo.png" alt="Folder Structure" width="250" height="50" style="background-color:black"> <hr>Bootcamp Lottery Project
 
 <img src="app/assets/projectpic.png" alt="Folder Structure" width="800" height="600">
 
