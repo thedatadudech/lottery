@@ -17,7 +17,7 @@ import NftDex from "./components/NftDex";
 
 // Default styles that can be overridden by your app
 import "@solana/wallet-adapter-react-ui/styles.css";
-import NftDex from "./components/NftDex";
+import BlockchainAnimation from "./components/BlockchainAnimation";
 
 function App() {
   // The network can be set to 'devnet', 'testnet', or 'mainnet-beta'.
@@ -49,18 +49,7 @@ function App() {
               <BalanceDisplay />
             </div>
           </div>
-          <div className="blockchain-animation">
-            <div className="block"></div>
-            <div className="block"></div>
-            <div className="block"></div>
-            <div className="block"></div>
-            <div className="block"></div>
-            <div className="block"></div>
-            <div className="block"></div>
-            <div className="block"></div>
-            <div className="block"></div>
-            <div className="block"></div>
-          </div>
+          <BlockchainAnimation />
         </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
