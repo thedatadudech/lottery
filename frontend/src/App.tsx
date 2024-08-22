@@ -13,6 +13,7 @@ import "./App.css";
 
 // Default styles that can be overridden by your app
 import "@solana/wallet-adapter-react-ui/styles.css";
+import NftDex from "./components/NftDex";
 
 function App() {
   // The network can be set to 'devnet', 'testnet', or 'mainnet-beta'.
@@ -34,6 +35,7 @@ function App() {
         <WalletModalProvider>
           <WalletMultiButton />
           <h1>Hello Solana</h1>
+          <NftDex />
         </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
