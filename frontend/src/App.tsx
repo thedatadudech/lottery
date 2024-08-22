@@ -3,6 +3,8 @@ import {
   ConnectionProvider,
   WalletProvider,
 } from "@solana/wallet-adapter-react";
+import { extendBaseTheme, theme as chakraTheme } from "@chakra-ui/react";
+
 import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
 import {
   WalletModalProvider,
@@ -10,6 +12,8 @@ import {
 } from "@solana/wallet-adapter-react-ui";
 import { clusterApiUrl } from "@solana/web3.js";
 import "./App.css";
+import BalanceDisplay from "./components/BalanceDisplay";
+import NftDex from "./components/NftDex";
 
 // Default styles that can be overridden by your app
 import "@solana/wallet-adapter-react-ui/styles.css";
@@ -32,8 +36,30 @@ function App() {
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
-          <WalletMultiButton />
-          <h1>Hello Solana</h1>
+          <div className="app-container">
+            <h1 className="animated-title">
+              Solana Bootcamp Project : Lottery
+            </h1>
+            <NftDex />
+          </div>
+          <div className="wallet-container">
+            <WalletMultiButton />
+            <div className="neon-text">
+              <BalanceDisplay />
+            </div>
+          </div>
+          <div className="blockchain-animation">
+            <div className="block"></div>
+            <div className="block"></div>
+            <div className="block"></div>
+            <div className="block"></div>
+            <div className="block"></div>
+            <div className="block"></div>
+            <div className="block"></div>
+            <div className="block"></div>
+            <div className="block"></div>
+            <div className="block"></div>
+          </div>
         </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
