@@ -14,6 +14,7 @@ import { clusterApiUrl } from "@solana/web3.js";
 import "./App.css";
 import BalanceDisplay from "./components/BalanceDisplay";
 import NftDex from "./components/NftDex";
+import BuyTicker from "./components/BuyTicket";
 
 // Default styles that can be overridden by your app
 import "@solana/wallet-adapter-react-ui/styles.css";
@@ -33,6 +34,12 @@ function App() {
     [network],
   );
 
+   // Function to handle Buy Ticket button click
+  const handleBuyTicketClick = () => {
+    BuyTicket(); // Call the BuyTicket function
+  };
+ 
+
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
@@ -50,6 +57,11 @@ function App() {
             </div>
           </div>
           <BlockchainAnimation />
+          <div className="buy-ticket-container">
+            <button className="buy-ticket-button" onClick={handleBuyTicketClick}>
+              Buy Ticket
+            </button>
+          </div>
         </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
