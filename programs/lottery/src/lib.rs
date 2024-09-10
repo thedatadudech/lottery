@@ -119,6 +119,7 @@ pub struct CreateTicket<'info> {
     )]
     pub mint_account: Account<'info, Mint>,
 
+    /// CHECK: Needed for unchecked accounts for Anchor not to panick
     #[account(mut)]
     pub token_account: UncheckedAccount<'info>,
 
