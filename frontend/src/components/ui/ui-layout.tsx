@@ -1,6 +1,7 @@
 import { WalletButton } from "../solana/solana-provider";
 import * as React from "react";
 import { ReactNode, Suspense, useEffect, useRef } from "react";
+import { Navigation } from "../../navigation";
 
 import { AccountChecker } from "../account/account-ui";
 import { ExplorerLink } from "../cluster/cluster-ui";
@@ -19,13 +20,8 @@ export function UiLayout({
   return (
     <div className="h-full flex flex-col">
       <div className="navbar bg-base-300 text-neutral-content flex-col md:flex-row space-y-2 md:space-y-0">
-        <div className="flex-1">
-          <img className="h-4 md:h-6" alt="Logo" src="/logo.png" />
-          <ul className="menu menu-horizontal px-1 space-x-2">
-            {links.map(({ label, path }) => (
-              <li key={path}>{label}</li>
-            ))}
-          </ul>
+        <div className="flex-1">                 
+             <Navigation links={links}/>            
         </div>
         <div className="flex-none space-x-2">
           <WalletButton />
