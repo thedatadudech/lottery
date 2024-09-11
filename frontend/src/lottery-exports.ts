@@ -9,7 +9,7 @@ export { Lottery, LotteryIDL };
 
 // After updating your program ID (e.g. after running `anchor keys sync`) update the value below.
 export const LOTTERY_PROGRAM_ID = new PublicKey(
-  '8b8fSgX4sqiW5amc6AD9sgj8NzS94N8V71ipJTPK9RPv'
+  '68VV9ZqDAdgQUYRjpkuF2BVsGf5U5Q4jrjDdA5cFxAhZ'
 );
 
 // This is a helper function to get the Counter Anchor program.

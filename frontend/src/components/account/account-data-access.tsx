@@ -1,6 +1,7 @@
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { getLotteryProgram, getLotteryProgramId } from "../../lottery-exports";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { getAssociatedTokenAddress } from '@solana/spl-token';
 import {
   Connection,
   Cluster,
@@ -139,45 +140,115 @@ export function useLotteryProgram() {
       toast.error(`Failed to create journal entry: ${error.message}`);
     },
   });
-
   interface BuyTicketArgs {
     lottery: PublicKey;
   }
-
+  
   const buyTicket = useMutation<string, Error, BuyTicketArgs>({
     mutationKey: ["buyticket", "buy", { cluster }],
     mutationFn: async ({ lottery }) => {
       const player = web3.Keypair.generate();
+  
+      // Request airdrop to fund the player
       await provider.connection.requestAirdrop(
         player.publicKey,
         2 * LAMPORTS_PER_SOL,
       );
-      // //const idx = (await program.account.lottery.fetch(lottery)).count
-      // const idx = 0;
-      // console.log("Number of tickets", idx);
-      // // Consutruct buffer containing latest index
-      // const buf1 = Buffer.alloc(4);
-      // buf1.writeUIntBE(idx, 0, 4);
-      // // Get lottery ticket
-
-      return await program.methods
+      let startBalancePlayer: number = await provider.connection.getBalance(
+        player.publicKey
+      );
+  
+      // Fetch the current state of the lottery
+      const lotteryState = await program.account.lottery.fetch(lottery);
+  
+      // Get the current lottery index
+      const idx = lotteryState.count;
+  
+      // Construct a buffer containing the latest index
+      const buf1 = Buffer.alloc(4);
+      buf1.writeUIntBE(idx, 0, 4);
+  
+      // Create the PDA for the ticket account
+      const [ticketAccountAddress, bumpPDA] = await PublicKey.findProgramAddress(
+        [buf1, lottery.toBytes()],
+        program.programId
+      );
+  
+      // Buy the ticket by calling the smart contract
+      const buyTx = await program.methods
         .buyTicket()
         .accounts({
           lottery: lottery,
           buyer: player.publicKey,
+          ticket: ticketAccountAddress,
+          systemProgram: web3.SystemProgram.programId,
         })
         .signers([player])
         .rpc();
+      
+      console.log("Buy ticket tx signature", buyTx);
+  
+      // Set up numbers for NFT minting
+      const numbersArray = [1,2,3,44,55,6];
+      console.log("Minting NFT for lottery ticket...");
+      console.log(`Numbers: ${numbersArray.join(",")}`);
+  
+      // Get lottery index
+      let idx2: number = (await program.account.lottery.fetch(lottery))
+      .count;
+
+      // Consutruct buffer containing latest index
+      const buf2 = Buffer.alloc(4);
+      buf2.writeUIntBE(idx2, 0, 4);
+      // Derive the PDA for the NFT mint
+      const [ticketPda, bump] = PublicKey.findProgramAddressSync(
+        [Buffer.from(new Uint8Array(numbersArray)), buf2],
+        program.programId
+      );
+  
+      // Derive the associated token address for the NFT
+      const tokenAddress = await getAssociatedTokenAddress(
+        ticketPda, // Mint address (PDA for the NFT)
+        player.publicKey, // Owner's public key
+        false // Allow owner off curve (usually false)
+      );
+  
+      // Check if the PDA already exists
+      const accountInfo = await provider.connection.getAccountInfo(ticketPda);
+      if (accountInfo) {
+        console.log(`Ticket with numbers: ${numbersArray.join(",")} already exists.`);
+        throw new Error('Ticket with chosen numbers already exists. Choose different numbers.');
+      }
+  
+      // Mint the ticket as an NFT
+      const mintTx = await program.methods
+        .mintTicket(numbersArray, bump)
+        .accounts({
+          mintAccount: ticketPda,
+          payer: player.publicKey,
+          tokenAccount: tokenAddress,
+          ticket: ticketAccountAddress,
+          lottery: lottery,
+        })
+        .signers([player])
+        .rpc();
+      
+      console.log("Mint NFT tx signature", mintTx);
+      let endBalanacePlayer: number = await provider.connection.getBalance(
+        player.publicKey
+      );
+      console.log("Initial :", startBalancePlayer);
+      console.log("Final :", endBalanacePlayer);
     },
     onSuccess: (signature) => {
       transactionToast(signature);
       accounts.refetch();
     },
     onError: (error) => {
-      toast.error(`Failed to buy ticket: ${error.message}`);
+      toast.error(`Failed to buy and mint ticket: ${error.message}`);
     },
   });
-
+  
   return {
     program,
     programId,
@@ -186,6 +257,54 @@ export function useLotteryProgram() {
     createLottery,
     buyTicket,
   };
+//  interface BuyTicketArgs {
+//    lottery: PublicKey;
+//  }
+//
+//  const buyTicket = useMutation<string, Error, BuyTicketArgs>({
+//    mutationKey: ["buyticket", "buy", { cluster }],
+//    mutationFn: async ({ lottery }) => {
+//      const player = web3.Keypair.generate();
+//      await provider.connection.requestAirdrop(
+//        player.publicKey,
+//        2 * LAMPORTS_PER_SOL,
+//      );
+//      // //const idx = (await program.account.lottery.fetch(lottery)).count
+//      // const idx = 0;
+//      // console.log("Number of tickets", idx);
+//      // // Consutruct buffer containing latest index
+//      // const buf1 = Buffer.alloc(4);
+//      // buf1.writeUIntBE(idx, 0, 4);
+//      // // Get lottery ticket
+//
+//      return await program.methods
+//        .buyTicket()
+//        .accounts({
+//          lottery: lottery,
+//          buyer: player.publicKey,
+//        })
+//        .signers([player])
+//        .rpc();
+//
+//    },
+//    onSuccess: (signature) => {
+//      transactionToast(signature);
+//      accounts.refetch();
+//    },
+//    onError: (error) => {
+//      toast.error(`Failed to buy ticket: ${error.message}`);
+//    },
+//  });
+//
+//
+//  return {
+//    program,
+//    programId,
+//    accounts,
+//    getProgramAccount,
+//    createLottery,
+//    buyTicket,
+//  };
 }
 
 export function useLotteryProgramAccount({ account }: { account: PublicKey }) {

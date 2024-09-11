@@ -88,8 +88,8 @@ pub fn buy_ticket(ctx: Context<BuyTicket>) -> Result<()> {
     lottery.count += 1;
 
     msg!(
-        "Player {} bought a ticket. Ticket account address",
-        &ctx.accounts.buyer.key() // &ctx.accounts.ticket.key()
+        "Player {} bought a ticket. Ticket account address {}",
+        &ctx.accounts.buyer.key(), &ctx.accounts.ticket.key()
     );
 
     Ok(())

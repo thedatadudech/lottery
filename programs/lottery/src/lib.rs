@@ -5,7 +5,7 @@ use anchor_spl::{
 };
 pub mod ticket;
 
-declare_id!("8b8fSgX4sqiW5amc6AD9sgj8NzS94N8V71ipJTPK9RPv");
+declare_id!("68VV9ZqDAdgQUYRjpkuF2BVsGf5U5Q4jrjDdA5cFxAhZ");
 
 #[program]
 pub mod lottery {
@@ -77,16 +77,16 @@ pub struct Create<'info> {
 
 #[derive(Accounts)]
 pub struct BuyTicket<'info> {
-    // #[account(init,
-    //     seeds = [
-    //         &lottery.count.to_be_bytes(),
-    //         lottery.key().as_ref()
-    //     ],
-    //     bump,
-    //     payer = buyer,
-    //     space = 80
-    // )]
-    // pub ticket: Account<'info, Ticket>,
+    #[account(init,
+        seeds = [
+            &lottery.count.to_be_bytes(),
+            lottery.key().as_ref()
+        ],
+        bump,
+        payer = buyer,
+        space = 86
+    )]
+    pub ticket: Account<'info, Ticket>,
     #[account(mut)]
     pub buyer: Signer<'info>,
     #[account(mut)]
@@ -103,7 +103,7 @@ pub struct CreateTicket<'info> {
         mint::decimals = 0,
         mint::authority = payer.key(),
         mint::freeze_authority = payer.key(),
-        seeds = [numbers.as_ref()],
+        seeds = [numbers.as_ref(), &lottery.count.to_be_bytes()],
         bump,
     )]
     pub mint_account: Account<'info, Mint>,
