@@ -1,11 +1,16 @@
 import React, { useEffect, useState } from "react";
+import { Cluster, PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { AppHero, ellipsify } from "../ui/ui-layout";
 import { fetchAccountInfo } from "../../solana-connection";
+import {getLotteryProgram, getLotteryProgramId} from "../../lottery-exports"
+import { useCluster } from '../cluster/cluster-data-access';
+import { useMemo } from 'react';
 import {
   AccountBalance,
   AccountButtons,
   AccountTokens,
+  AccountLottery,
   AccountTransactions,
 } from "./account-ui";
 import NftDex from "../NftDex";
@@ -13,8 +18,14 @@ import NftDex from "../NftDex";
 export default function AccountDetailFeature() {
   const [balance, setBalance] = useState<number | null>(null);
 
+  const {cluster} = useCluster() 
   // `useWallet` provides the public key of the connected wallet
   const { publicKey } = useWallet();
+  const programId = useMemo(
+    () => getLotteryProgramId(cluster.network as Cluster),
+    [cluster]
+  );
+  
 
   useEffect(() => {
     // This effect runs whenever `publicKey` changes (i.e., when a wallet connects or changes)
@@ -33,7 +44,10 @@ export default function AccountDetailFeature() {
     return <div>Error loading account</div>;
   }
 
+  const lottery = new PublicKey("3UHTq78o9qYm5W4n1BEeLtSK8SwyHEaDUt6ipEFBgqaZ")
+
   return (
+    <div>
     <div>
       <AppHero
         title={<AccountBalance address={publicKey} />}
@@ -47,9 +61,11 @@ export default function AccountDetailFeature() {
         </div>
       </AppHero>
       <div className="space-y-8">
+        <AccountLottery address={programId} />
         <AccountTokens address={publicKey} />
         <AccountTransactions address={publicKey} />
-      </div>
-    </div>
+      </div>      
+    </div>    
+  </div>
   );
 }
