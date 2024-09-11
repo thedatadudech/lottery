@@ -3,8 +3,6 @@ use anchor_spl::{
     associated_token,
     token::{self, Burn, MintTo},
 };
-use solana_program::hash::{hash, Hash};
-
 use std::collections::HashSet;
 
 // Constants
@@ -16,32 +14,21 @@ pub const SECONDS_IN_A_DAY: i64 = 86400;
 
 // Randomly generate 6 unique numbers between 1 and 60
 pub fn generate_random_numbers() -> Result<[u8; 6]> {
-    // Fetch the current clock sysvar; return an error if it fails
+
+    // Fetch the current clock sysvar
     let clock = Clock::get()?;
 
-    // Combine slot and timestamp to form a seed
-    let seed = clock.slot.to_le_bytes().to_vec().into_iter()
-        .chain(clock.unix_timestamp.to_le_bytes().to_vec())
-        .collect::<Vec<u8>>();
+    // Use the current slot and timestamp for randomness
+    let slot = clock.slot;
+    let unix_timestamp = clock.unix_timestamp as u64;
+    
+    // Combine them to get some randomness
+    let seed = slot ^ unix_timestamp;
 
-    // Hash the seed to generate a "random" byte array
-    let hash_seed: Hash = hash(&seed);
-
-    // Use a set to keep track of unique numbers
-    let mut unique_numbers: HashSet<u8> = HashSet::new();
-
-    // Convert the hash into a list of unique numbers in the range 1-60
-    let mut i = 0;
-    while unique_numbers.len() < 6 {
-        let number = (hash_seed.as_ref()[i] % 60) + 1;  // Range 1-60
-        unique_numbers.insert(number);
-        i = (i + 1) % hash_seed.as_ref().len();  // Wrap around hash bytes if necessary
-    }
-
-    // Convert the unique numbers set into an array
+    // Use the seed to generate random numbers
     let mut chosen_numbers: [u8; 6] = [0; 6];
-    for (i, &num) in unique_numbers.iter().enumerate() {
-        chosen_numbers[i] = num;
+    for i in 0..6 {
+        chosen_numbers[i] = ((seed >> (i * 8)) as u8 % 60) + 1;
     }
 
     validate_numbers(&chosen_numbers)?;
