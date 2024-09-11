@@ -1,9 +1,6 @@
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import {getLotteryProgram, getLotteryProgramId} from "../../lottery-exports"
-import {
-  TOKEN_2022_PROGRAM_ID,
-  TOKEN_PROGRAM_ID,
-} from "@solana/spl-token";
+import { getLotteryProgram, getLotteryProgramId } from "../../lottery-exports";
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
   Connection,
   Cluster,
@@ -14,14 +11,14 @@ import {
   TransactionBlockhashCtor,
   TransactionMessage,
   TransactionSignature,
-  VersionedTransaction,  
+  VersionedTransaction,
 } from "@solana/web3.js";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { useCluster } from '../cluster/cluster-data-access';
+import { useCluster } from "../cluster/cluster-data-access";
 import { useTransactionToast } from "../ui/ui-layout";
-import { useAnchorProvider } from '../solana/solana-provider'
-import { useMemo } from 'react';
+import { useAnchorProvider } from "../solana/solana-provider";
+import { useMemo } from "react";
 import React from "react";
 import { web3 } from "@coral-xyz/anchor";
 
@@ -36,111 +33,106 @@ export function useGetBalance({ address }: { address: PublicKey }) {
 
 interface CreateLotteryArgs {
   ticket_price: bigint;
-  oracle_pubkey: PublicKey; 
+  oracle_pubkey: PublicKey;
   admin: PublicKey;
 }
 
-
-
-
 export function useLotteryProgram() {
-  console.log("hello from useLotteryProgram")
+  console.log("hello from useLotteryProgram");
   const { connection } = useConnection();
   const { cluster } = useCluster();
- 
+
   const transactionToast = useTransactionToast();
   const provider = useAnchorProvider();
-  
 
   const programId = useMemo(
     () => getLotteryProgramId(cluster.network as Cluster),
-    [cluster]
+    [cluster],
   );
-  console.log("Program_ID", programId.toString())
+  console.log("Program_ID", programId.toString());
   const program = getLotteryProgram(provider);
- 
-    
-  const accounts = useQuery({    
-    queryKey: ['lottery', 'all', { cluster }],
+
+  const accounts = useQuery({
+    queryKey: ["lottery", "all", { cluster }],
     queryFn: () => program.account.lottery.all(),
   });
 
+  const createLotteryAccount = async () => {
+    const connection = provider.connection;
+    const wallet = provider.wallet;
 
-    const createLotteryAccount = async () => {  
-      const connection = provider.connection;
-      const wallet = provider.wallet;
-    
-      const lotteryAccount = new web3.Keypair();  // Neues Konto für die Lotterie
-      
-    
-      // Hole den neuesten Blockhash und die dazugehörigen Daten
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-    
-      // Transaktion erstellen, um ein neues Konto zu erstellen
-      const transaction = new Transaction({
-        recentBlockhash: blockhash,  // Füge den recentBlockhash hinzu
-        feePayer: wallet.publicKey,  // Das Wallet des Benutzers als Payer
-      } as TransactionBlockhashCtor).add(
-        web3.SystemProgram.createAccount({
-          fromPubkey: wallet.publicKey,  // Payer ist das Wallet des Benutzers
-          newAccountPubkey: lotteryAccount.publicKey,  // Neues Konto für die Lotterie
-          lamports: await connection.getMinimumBalanceForRentExemption(180),  // Mindestmiete für das Konto
-          space: 180,  // Speicherplatz für das Konto
-          programId: programId,  // ID des Programms
-        })
-      );
+    const lotteryAccount = new web3.Keypair(); // Neues Konto für die Lotterie
 
+    // Hole den neuesten Blockhash und die dazugehörigen Daten
+    const { blockhash, lastValidBlockHeight } =
+      await connection.getLatestBlockhash();
 
-      transaction.partialSign(lotteryAccount);  
-    
-       // Signiere die Transaktion
-      const signedTransaction = await wallet.signTransaction(transaction);
+    // Transaktion erstellen, um ein neues Konto zu erstellen
+    const transaction = new Transaction({
+      recentBlockhash: blockhash, // Füge den recentBlockhash hinzu
+      feePayer: wallet.publicKey, // Das Wallet des Benutzers als Payer
+    } as TransactionBlockhashCtor).add(
+      web3.SystemProgram.createAccount({
+        fromPubkey: wallet.publicKey, // Payer ist das Wallet des Benutzers
+        newAccountPubkey: lotteryAccount.publicKey, // Neues Konto für die Lotterie
+        lamports: await connection.getMinimumBalanceForRentExemption(180), // Mindestmiete für das Konto
+        space: 180, // Speicherplatz für das Konto
+        programId: programId, // ID des Programms
+      }),
+    );
 
-      // Sende die signierte Transaktion manuell an die Solana Blockchain
-      const signature = await connection.sendRawTransaction(signedTransaction.serialize());
-      const confirmationStrategy = {
-        signature,  // Transaktionssignatur
-        blockhash,  // Blockhash der Transaktion
-        lastValidBlockHeight,  // Letzte gültige Blockhöhe
-      };
-    
-      await connection.confirmTransaction(confirmationStrategy);
-    
-      // Rückgabe des PublicKeys des neuen Kontos
-      return lotteryAccount    
-   
+    transaction.partialSign(lotteryAccount);
+
+    // Signiere die Transaktion
+    const signedTransaction = await wallet.signTransaction(transaction);
+
+    // Sende die signierte Transaktion manuell an die Solana Blockchain
+    const signature = await connection.sendRawTransaction(
+      signedTransaction.serialize(),
+    );
+    const confirmationStrategy = {
+      signature, // Transaktionssignatur
+      blockhash, // Blockhash der Transaktion
+      lastValidBlockHeight, // Letzte gültige Blockhöhe
+    };
+
+    await connection.confirmTransaction(confirmationStrategy);
+
+    // Rückgabe des PublicKeys des neuen Kontos
+    return lotteryAccount;
   };
 
-
-  
   const getProgramAccount = useQuery({
-    queryKey: ['get-program-account', { cluster }],
+    queryKey: ["get-program-account", { cluster }],
     queryFn: () => connection.getParsedAccountInfo(programId),
-  });  
-  
-  
+  });
+
   const createLottery = useMutation<string, Error, CreateLotteryArgs>({
-    mutationKey: ['lotteryEntry', 'create', { cluster }],
-    mutationFn: async ({ ticket_price, oracle_pubkey,  }) => {    
+    mutationKey: ["lotteryEntry", "create", { cluster }],
+    mutationFn: async ({ ticket_price, oracle_pubkey }) => {
       console.log("Hello from Lottery creation");
       const lottery = web3.Keypair.generate();
       const lottery_admin = web3.Keypair.generate();
-             
+
       await provider.connection.requestAirdrop(
         lottery.publicKey,
-        2 * LAMPORTS_PER_SOL
-      )
+        2 * LAMPORTS_PER_SOL,
+      );
       await provider.connection.requestAirdrop(
         lottery_admin.publicKey,
-        2 * LAMPORTS_PER_SOL
-      )  
-      return await program.methods.initialiseLottery(ticket_price, oracle_pubkey).accounts({
-        lottery: lottery.publicKey,
-        admin: lottery_admin.publicKey,        
-      }).signers([lottery, lottery_admin]).rpc();
+        2 * LAMPORTS_PER_SOL,
+      );
+      return await program.methods
+        .initialiseLottery(ticket_price, oracle_pubkey)
+        .accounts({
+          lottery: lottery.publicKey,
+          admin: lottery_admin.publicKey,
+        })
+        .signers([lottery, lottery_admin])
+        .rpc();
     },
     onSuccess: (signature) => {
-      transactionToast(signature);      
+      transactionToast(signature);
       accounts.refetch();
     },
     onError: (error) => {
@@ -148,47 +140,43 @@ export function useLotteryProgram() {
     },
   });
 
-
-  interface BuyTicketArgs {  
-    lottery: PublicKey;    
+  interface BuyTicketArgs {
+    lottery: PublicKey;
   }
-  
+
   const buyTicket = useMutation<string, Error, BuyTicketArgs>({
-    mutationKey: ['buyticket', 'buy', { cluster }],
-    mutationFn: async ({ lottery  }) => { 
-      const player = web3.Keypair.generate()
+    mutationKey: ["buyticket", "buy", { cluster }],
+    mutationFn: async ({ lottery }) => {
+      const player = web3.Keypair.generate();
       await provider.connection.requestAirdrop(
         player.publicKey,
-        2 * LAMPORTS_PER_SOL
-      ) 
-      //const idx = (await program.account.lottery.fetch(lottery)).count
-      const idx = 1
-      console.log("Number of tickets", idx)
-      // Consutruct buffer containing latest index
-      const buf1 = Buffer.alloc(4);
-      buf1.writeUIntBE(idx, 0, 4);        
-    // Get lottery ticket
-     return await program.methods
-      .buyTicket()
-      .accounts({
-        lottery: lottery,
-        buyer: player.publicKey,          
-      })
-      .signers([player])
-      .rpc();
+        2 * LAMPORTS_PER_SOL,
+      );
+      // //const idx = (await program.account.lottery.fetch(lottery)).count
+      // const idx = 0;
+      // console.log("Number of tickets", idx);
+      // // Consutruct buffer containing latest index
+      // const buf1 = Buffer.alloc(4);
+      // buf1.writeUIntBE(idx, 0, 4);
+      // // Get lottery ticket
+
+      return await program.methods
+        .buyTicket()
+        .accounts({
+          lottery: lottery,
+          buyer: player.publicKey,
+        })
+        .signers([player])
+        .rpc();
     },
     onSuccess: (signature) => {
-      transactionToast(signature);      
+      transactionToast(signature);
       accounts.refetch();
     },
     onError: (error) => {
       toast.error(`Failed to buy ticket: ${error.message}`);
-    },  
-});
-
-
-
-
+    },
+  });
 
   return {
     program,
@@ -196,39 +184,24 @@ export function useLotteryProgram() {
     accounts,
     getProgramAccount,
     createLottery,
-    buyTicket
+    buyTicket,
   };
 }
 
 export function useLotteryProgramAccount({ account }: { account: PublicKey }) {
   const { cluster } = useCluster();
- 
-  const { program,  } = useLotteryProgram();
+
+  const { program } = useLotteryProgram();
 
   const accountQuery = useQuery({
-    queryKey: ['lottery', 'fetch', { cluster, account }],
+    queryKey: ["lottery", "fetch", { cluster, account }],
     queryFn: () => program.account.lottery.fetch(account),
   });
 
-    
-
   return {
-    accountQuery,    
+    accountQuery,
   };
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 export function useGetSignatures({ address }: { address: PublicKey }) {
   const { connection } = useConnection();
@@ -239,27 +212,22 @@ export function useGetSignatures({ address }: { address: PublicKey }) {
   });
 }
 
+export function useGetProgramAccounts({ address }: { address: PublicKey }) {
+  const { connection } = useConnection();
 
-
-export function useGetProgramAccounts({address}: {address: PublicKey}) {
-  const {connection} = useConnection()
- 
   return useQuery({
     queryKey: [
       "get-program-accounts",
       { endpoint: connection.rpcEndpoint, address },
     ],
     queryFn: async () => {
-      const [programAccounts,] = await Promise.all([
+      const [programAccounts] = await Promise.all([
         connection.getProgramAccounts(address),
-     
-        
       ]);
       return [...programAccounts];
     },
   });
 }
-
 
 export function useGetTokenAccounts({ address }: { address: PublicKey }) {
   const { connection } = useConnection();
@@ -426,5 +394,3 @@ async function createTransaction({
     latestBlockhash,
   };
 }
-
-

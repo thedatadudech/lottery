@@ -49,7 +49,7 @@ describe("Lottery test", () => {
       .accounts({
         lottery: lottery.publicKey,
         admin: lottery_admin.publicKey,
-        systemProgram: SystemProgram.programId,
+        //systemProgram: SystemProgram.programId,
       })
       .signers([lottery, lottery_admin])
       .rpc();

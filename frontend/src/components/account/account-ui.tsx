@@ -1,6 +1,6 @@
 import React from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { LAMPORTS_PER_SOL, PublicKey,  } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { IconRefresh } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -9,17 +9,17 @@ import { useCluster } from "../cluster/cluster-data-access";
 import { ExplorerLink } from "../cluster/cluster-ui";
 import { BN, web3 } from "@coral-xyz/anchor";
 
-import { 
+import {
   useLotteryProgram,
-  useGetProgramAccounts
-} from './account-data-access';
+  useGetProgramAccounts,
+} from "./account-data-access";
 
 import {
   useGetBalance,
   useGetSignatures,
   useGetTokenAccounts,
   useRequestAirdrop,
-  useTransferSol,  
+  useTransferSol,
 } from "./account-data-access";
 import { useAnchorProvider } from "../solana/solana-provider";
 import { getLotteryProgram } from "../../lottery-exports";
@@ -161,7 +161,6 @@ export function AccountButtons({ address }: { address: PublicKey }) {
   );
 }
 
-
 export function AccountLottery({ address }: { address: PublicKey }) {
   const [showAll, setShowAll] = useState(false);
   const query = useGetProgramAccounts({ address });
@@ -183,7 +182,7 @@ export function AccountLottery({ address }: { address: PublicKey }) {
             ) : (
               <button
                 className="btn btn-sm btn-outline"
-                onClick={() => alert("clicked")}                 
+                onClick={() => query.refetch()}
               >
                 <IconRefresh size={16} />
               </button>
@@ -204,8 +203,8 @@ export function AccountLottery({ address }: { address: PublicKey }) {
             <table className="table border-4 rounded-lg border-separate border-base-300">
               <thead>
                 <tr>
-                  <th>Public Key</th>              
-                  <th>No Tickets</th>              
+                  <th>Public Key</th>
+                  <th>No Tickets</th>
                   <th className="text-right">Balance</th>
                 </tr>
               </thead>
@@ -223,15 +222,11 @@ export function AccountLottery({ address }: { address: PublicKey }) {
                       </div>
                     </td>
                     <td className="text-right">
-                      <span className="font-mono">
-                        
-                      {account.data.count}                       
-                      </span>
-                    </td>                  
+                      <span className="font-mono">{account.data.count}</span>
+                    </td>
                     <td className="text-right">
                       <span className="font-mono">
-                        
-                      {account.lamports / LAMPORTS_PER_SOL} SOL                      
+                        {account.lamports / LAMPORTS_PER_SOL} SOL
                       </span>
                     </td>
                   </tr>
@@ -517,9 +512,6 @@ function ModalAirdrop({
   );
 }
 
-
-
-
 function ModalCreateLottery({
   hide,
   show,
@@ -529,33 +521,34 @@ function ModalCreateLottery({
   show: boolean;
   address: PublicKey;
 }) {
-
   const { createLottery } = useLotteryProgram();
   const { publicKey } = useWallet();
   const [ticket_price, setTicket_price] = useState(0);
-   const oracle = web3.Keypair.generate();
-   
- 
-     
+  const oracle = web3.Keypair.generate();
+
   const handleSubmit = () => {
     console.log("starting handle");
-    if (publicKey ) {
+    if (publicKey) {
       console.log("Pubkey from handle", publicKey);
-      createLottery.mutateAsync({ ticket_price: new BN(LAMPORTS_PER_SOL * ticket_price), oracle_pubkey: oracle.publicKey, admin: publicKey }).then(() => hide());
+      createLottery
+        .mutateAsync({
+          ticket_price: new BN(LAMPORTS_PER_SOL * ticket_price),
+          oracle_pubkey: oracle.publicKey,
+          admin: publicKey,
+        })
+        .then(() => hide());
     }
   };
 
   if (!publicKey) {
     return <p>Connect your wallet</p>;
   }
- 
 
   return (
     <AppModal
       hide={hide}
       show={show}
       title="Create Web3 Lottery"
-    
       submitLabel="Create Lottery"
       submit={handleSubmit}
     >
@@ -563,7 +556,7 @@ function ModalCreateLottery({
         type="number"
         placeholder="Ticket Price"
         value={ticket_price}
-        onChange={(e) => setTicket_price(parseInt(e.target.value))}      
+        onChange={(e) => setTicket_price(parseInt(e.target.value))}
         className="input input-bordered"
       />
       <input
@@ -572,7 +565,6 @@ function ModalCreateLottery({
         value={oracle.publicKey.toString()}
         className="input input-bordered"
       />
-      
     </AppModal>
   );
 }
@@ -585,31 +577,27 @@ function ModalBuyTicket({
   show: boolean;
   address: PublicKey;
 }) {
-
-  
   const { publicKey } = useWallet();
   const [lottery_account, setLotteryAccount] = useState("");
 
   const { buyTicket } = useLotteryProgram();
-     
- 
-     
-  const handleSubmit = () => {    
+
+  const handleSubmit = () => {
     console.log("Pubkey from BuyTicket handle", publicKey);
-    buyTicket.mutateAsync({ lottery: new PublicKey(lottery_account)  }).then(() => hide());
+    buyTicket
+      .mutateAsync({ lottery: new PublicKey(lottery_account) })
+      .then(() => hide());
   };
 
   if (!publicKey) {
     return <p>Connect your wallet</p>;
   }
- 
 
   return (
     <AppModal
       hide={hide}
       show={show}
       title="Buy Tickets"
-    
       submitLabel="Buy Ticket"
       submit={handleSubmit}
     >
@@ -617,9 +605,9 @@ function ModalBuyTicket({
         type="text"
         placeholder="Lottery address"
         value={lottery_account}
-        onChange={(e) => setLotteryAccount(e.target.value)}      
+        onChange={(e) => setLotteryAccount(e.target.value)}
         className="input input-bordered"
-      />         
+      />
     </AppModal>
   );
 }
@@ -632,33 +620,27 @@ function ModalCountTicket({
   show: boolean;
   address: PublicKey;
 }) {
+  const { publicKey } = useWallet();
+  const provider = useAnchorProvider();
+  const program = getLotteryProgram(provider);
+  const [lottery_account, setLotteryAccount] = useState("");
 
-   const { publicKey } = useWallet(); 
-   const provider = useAnchorProvider();
-   const program = getLotteryProgram(provider);
-   const [lottery_account, setLotteryAccount] = useState("");
-
-  
-     
- 
-     
-  const handleSubmit = async () => {    
-    const tickets = (await program.account.lottery.fetch(new PublicKey(lottery_account))).count
-    alert(`There are ${tickets}`)
-    ;
+  const handleSubmit = async () => {
+    const tickets = (
+      await program.account.lottery.fetch(new PublicKey(lottery_account))
+    ).count;
+    alert(`There are ${tickets}`);
   };
 
   if (!publicKey) {
     return <p>Connect your wallet</p>;
   }
- 
 
   return (
     <AppModal
       hide={hide}
       show={show}
       title="Number of Tickets"
-    
       submitLabel="Count Tickets"
       submit={handleSubmit}
     >
@@ -666,9 +648,9 @@ function ModalCountTicket({
         type="text"
         placeholder="Lottery address"
         value={lottery_account}
-        onChange={(e) => setLotteryAccount(e.target.value)}      
+        onChange={(e) => setLotteryAccount(e.target.value)}
         className="input input-bordered"
-      />         
+      />
     </AppModal>
   );
 }
