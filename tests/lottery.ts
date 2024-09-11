@@ -49,7 +49,7 @@ describe("Lottery test", () => {
       .accounts({
         lottery: lottery.publicKey,
         admin: lottery_admin.publicKey,
-        systemProgram: SystemProgram.programId,
+        //systemProgram: SystemProgram.programId,
       })
       .signers([lottery, lottery_admin])
       .rpc();
@@ -103,13 +103,20 @@ describe("Lottery test", () => {
     );
 
     // Setup of the numbers and NFT ticket mint
-    const numbersArray = [7, 4, 4, 4, 5, 6]; // Use a regular array of numbers
+    const numbersArray = [1,2,3,4,5,22]; // Use a regular array of numbers
     console.log("Creating lottery ticket NFT ...");
     console.log(`Numbers: ${numbersArray.join(",")}`);
 
+    // Get lottery index
+    let idx2: number = (await program.account.lottery.fetch(lottery.publicKey))
+      .count;
+
+    // Consutruct buffer containing latest index
+    const buf2 = Buffer.alloc(4);
+    buf2.writeUIntBE(idx2, 0, 4);
     // Derive the PDA for your ticket account using the seed and program ID
     const [ticketPda, bump] = PublicKey.findProgramAddressSync(
-      [Buffer.from(new Uint8Array(numbersArray))],
+      [Buffer.from(new Uint8Array(numbersArray)), buf2],
       program.programId
     );
     const tokenAddress = anchor.utils.token.associatedAddress({
@@ -134,6 +141,7 @@ describe("Lottery test", () => {
         payer: player1.publicKey,
         tokenAccount: tokenAddress,
         ticket: ticket_account_address,
+        lottery : lottery.publicKey,
       })
       .signers([player1])
       .rpc();

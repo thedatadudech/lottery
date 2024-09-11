@@ -1,12 +1,11 @@
+use super::*;
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::{self, MintTo, Burn},
     associated_token,
+    token::{self, Burn, MintTo},
 };
+
 use std::collections::HashSet;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
-use super::*;
 
 // Constants
 pub const SECONDS_IN_A_DAY: i64 = 86400;
@@ -17,18 +16,29 @@ pub const SECONDS_IN_A_DAY: i64 = 86400;
 
 // Randomly generate 6 unique numbers between 1 and 60
 pub fn generate_random_numbers() -> [u8; 6] {
-    let mut rng = thread_rng();
-    let numbers: Vec<u8> = (1..=60).collect();
-    let selected: Vec<u8> = numbers.choose_multiple(&mut rng, 6).cloned().collect();
+    // Fetch the current clock sysvar
+    let clock = Clock::get().unwrap();
+
+    // Use the current slot and timestamp for randomness
+    let slot = clock.slot;
+    let unix_timestamp = clock.unix_timestamp as u64;
+
+    // Combine them to get some randomness
+    let seed = slot ^ unix_timestamp;
+
+    // Use the seed to generate random numbers
     let mut chosen_numbers: [u8; 6] = [0; 6];
-    chosen_numbers.copy_from_slice(&selected);
+    for i in 0..6 {
+        chosen_numbers[i] = ((seed >> (i * 8)) as u8 % 60) + 1;
+    }
+
     chosen_numbers
 }
 
 // Validate that chosen numbers are unique and between 1 and 60
 pub fn validate_numbers(numbers: &[u8; 6]) -> Result<()> {
     let unique_numbers: HashSet<&u8> = numbers.iter().collect();
-    
+
     require!(
         unique_numbers.len() == numbers.len() && numbers.iter().all(|&n| (1..=60).contains(&n)),
         CustomError::InvalidNumber
@@ -37,23 +47,20 @@ pub fn validate_numbers(numbers: &[u8; 6]) -> Result<()> {
 }
 
 // Helper to transfer SOL
-fn transfer_lamports<'info>(from: &Signer<'info>, to: &AccountInfo<'info>, amount: u64) -> Result<()> {
-    let ix = anchor_lang::solana_program::system_instruction::transfer(
-        &from.key(),
-        to.key,
-        amount,
-    );
-    anchor_lang::solana_program::program::invoke(
-        &ix,
-        &[from.to_account_info(), to.clone()],
-    )?;
+fn transfer_lamports<'info>(
+    from: &Signer<'info>,
+    to: &AccountInfo<'info>,
+    amount: u64,
+) -> Result<()> {
+    let ix = anchor_lang::solana_program::system_instruction::transfer(&from.key(), to.key, amount);
+    anchor_lang::solana_program::program::invoke(&ix, &[from.to_account_info(), to.clone()])?;
     Ok(())
 }
 
 // Helper to find `AccountInfo` by `Pubkey`
 pub fn find_account_info_by_pubkey<'info>(
-    accounts: &[AccountInfo<'info>], 
-    key: &Pubkey
+    accounts: &[AccountInfo<'info>],
+    key: &Pubkey,
 ) -> Option<AccountInfo<'info>> {
     for account in accounts.iter() {
         if *account.key == *key {
@@ -80,18 +87,17 @@ pub fn buy_ticket(ctx: Context<BuyTicket>) -> Result<()> {
     lottery.prize_pool += lottery.ticket_price;
     lottery.count += 1;
 
-    msg!("Player {} bought a ticket. Ticket account address: {}", &ctx.accounts.buyer.key(), &ctx.accounts.ticket.key());
+    msg!(
+        "Player {} bought a ticket. Ticket account address {}",
+        &ctx.accounts.buyer.key(), &ctx.accounts.ticket.key()
+    );
 
     Ok(())
 }
 
 /// Mints a new ticket NFT for the user
 /// - Creates the associated token account and mints the ticket NFT.
-pub fn mint_ticket(
-    ctx: Context<CreateTicket>,
-    numbers: [u8; 6],
-    _bump: u8
-) -> Result<()> {
+pub fn mint_ticket(ctx: Context<CreateTicket>, numbers: [u8; 6], _bump: u8) -> Result<()> {
     validate_numbers(&numbers)?;
 
     let ticket = &mut ctx.accounts.ticket;
@@ -100,23 +106,27 @@ pub fn mint_ticket(
     ticket.draw_number = ctx.accounts.lottery.count;
     ticket.owner = ctx.accounts.payer.key();
 
-    msg!("Creating ticket NFT mint address at {}", &ctx.accounts.mint_account.key());
+    msg!(
+        "Creating ticket NFT mint address at {}",
+        &ctx.accounts.mint_account.key()
+    );
 
-    associated_token::create(
-        CpiContext::new(
-            ctx.accounts.associated_token_program.to_account_info(),
-            associated_token::Create {
-                payer: ctx.accounts.payer.to_account_info(),
-                associated_token: ctx.accounts.token_account.to_account_info(),
-                authority: ctx.accounts.payer.to_account_info(),
-                mint: ctx.accounts.mint_account.to_account_info(),
-                system_program: ctx.accounts.system_program.to_account_info(),
-                token_program: ctx.accounts.token_program.to_account_info(),
-            },
-        ),
-    )?;
+    associated_token::create(CpiContext::new(
+        ctx.accounts.associated_token_program.to_account_info(),
+        associated_token::Create {
+            payer: ctx.accounts.payer.to_account_info(),
+            associated_token: ctx.accounts.token_account.to_account_info(),
+            authority: ctx.accounts.payer.to_account_info(),
+            mint: ctx.accounts.mint_account.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+            token_program: ctx.accounts.token_program.to_account_info(),
+        },
+    ))?;
 
-    msg!("Creating player NFT ticket account at {}", &ctx.accounts.token_account.key());
+    msg!(
+        "Creating player NFT ticket account at {}",
+        &ctx.accounts.token_account.key()
+    );
 
     token::mint_to(
         CpiContext::new(
@@ -130,7 +140,12 @@ pub fn mint_ticket(
         1,
     )?;
 
-    msg!("Player {} received: Ticket NFT {}, on {}", &ctx.accounts.payer.key(), &ctx.accounts.mint_account.key(), &ctx.accounts.token_account.key());
+    msg!(
+        "Player {} received: Ticket NFT {}, on {}",
+        &ctx.accounts.payer.key(),
+        &ctx.accounts.mint_account.key(),
+        &ctx.accounts.token_account.key()
+    );
 
     Ok(())
 }
@@ -157,7 +172,7 @@ pub fn perform_draw(ctx: Context<PerformDraw>) -> Result<()> {
 /// Distributes prizes to the winners of the draw
 /// - Identifies the winners and splits the prize pool among them.
 pub fn distribute_prizes<'info>(
-    ctx: Context<'_, '_, 'info, 'info, DistributePrizes<'info>>
+    ctx: Context<'_, '_, 'info, 'info, DistributePrizes<'info>>,
 ) -> Result<()> {
     let lottery = &mut ctx.accounts.lottery;
     let mut winners: Vec<AccountInfo<'info>> = Vec::new();
@@ -186,9 +201,7 @@ pub fn distribute_prizes<'info>(
 
 /// Burns the ticket NFT and allows the user to claim their prize
 /// - Checks if the ticket is a winner and transfers the prize to the owner.
-pub fn burn_ticket<'info>(
-    ctx: Context<'_, '_, 'info, 'info, BurnTicket<'info>>
-) -> Result<()> {
+pub fn burn_ticket<'info>(ctx: Context<'_, '_, 'info, 'info, BurnTicket<'info>>) -> Result<()> {
     let ticket = &ctx.accounts.ticket;
     let lottery = &mut ctx.accounts.lottery;
 
@@ -214,7 +227,10 @@ pub fn burn_ticket<'info>(
     **owner_account_info.try_borrow_mut_lamports()? += lottery.prize_pool;
     lottery.prize_pool = 0;
 
-    msg!("Ticket burned and prize claimed by {}", owner_account_info.key);
+    msg!(
+        "Ticket burned and prize claimed by {}",
+        owner_account_info.key
+    );
     Ok(())
 }
 

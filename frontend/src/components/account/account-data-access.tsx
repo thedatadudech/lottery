@@ -1,23 +1,27 @@
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import {
-  TOKEN_2022_PROGRAM_ID,
-  TOKEN_PROGRAM_ID,
-  createMint,
-  getOrCreateAssociatedTokenAccount,
-  mintTo,
-} from "@solana/spl-token";
+import { getLotteryProgram, getLotteryProgramId } from "../../lottery-exports";
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { getAssociatedTokenAddress } from '@solana/spl-token';
 import {
   Connection,
+  Cluster,
   LAMPORTS_PER_SOL,
   PublicKey,
   SystemProgram,
+  Transaction,
+  TransactionBlockhashCtor,
   TransactionMessage,
   TransactionSignature,
   VersionedTransaction,
 } from "@solana/web3.js";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
+import { useCluster } from "../cluster/cluster-data-access";
 import { useTransactionToast } from "../ui/ui-layout";
+import { useAnchorProvider } from "../solana/solana-provider";
+import { useMemo } from "react";
+import React from "react";
+import { web3 } from "@coral-xyz/anchor";
 
 export function useGetBalance({ address }: { address: PublicKey }) {
   const { connection } = useConnection();
@@ -28,7 +32,295 @@ export function useGetBalance({ address }: { address: PublicKey }) {
   });
 }
 
-export function useCreateToken() {}
+interface CreateLotteryArgs {
+  ticket_price: bigint;
+  oracle_pubkey: PublicKey;
+  admin: PublicKey;
+}
+
+export function useLotteryProgram() {
+  console.log("hello from useLotteryProgram");
+  const { connection } = useConnection();
+  const { cluster } = useCluster();
+
+  const transactionToast = useTransactionToast();
+  const provider = useAnchorProvider();
+
+  const programId = useMemo(
+    () => getLotteryProgramId(cluster.network as Cluster),
+    [cluster],
+  );
+  console.log("Program_ID", programId.toString());
+  const program = getLotteryProgram(provider);
+
+  const accounts = useQuery({
+    queryKey: ["lottery", "all", { cluster }],
+    queryFn: () => program.account.lottery.all(),
+  });
+
+  const createLotteryAccount = async () => {
+    const connection = provider.connection;
+    const wallet = provider.wallet;
+
+    const lotteryAccount = new web3.Keypair(); // Neues Konto für die Lotterie
+
+    // Hole den neuesten Blockhash und die dazugehörigen Daten
+    const { blockhash, lastValidBlockHeight } =
+      await connection.getLatestBlockhash();
+
+    // Transaktion erstellen, um ein neues Konto zu erstellen
+    const transaction = new Transaction({
+      recentBlockhash: blockhash, // Füge den recentBlockhash hinzu
+      feePayer: wallet.publicKey, // Das Wallet des Benutzers als Payer
+    } as TransactionBlockhashCtor).add(
+      web3.SystemProgram.createAccount({
+        fromPubkey: wallet.publicKey, // Payer ist das Wallet des Benutzers
+        newAccountPubkey: lotteryAccount.publicKey, // Neues Konto für die Lotterie
+        lamports: await connection.getMinimumBalanceForRentExemption(180), // Mindestmiete für das Konto
+        space: 180, // Speicherplatz für das Konto
+        programId: programId, // ID des Programms
+      }),
+    );
+
+    transaction.partialSign(lotteryAccount);
+
+    // Signiere die Transaktion
+    const signedTransaction = await wallet.signTransaction(transaction);
+
+    // Sende die signierte Transaktion manuell an die Solana Blockchain
+    const signature = await connection.sendRawTransaction(
+      signedTransaction.serialize(),
+    );
+    const confirmationStrategy = {
+      signature, // Transaktionssignatur
+      blockhash, // Blockhash der Transaktion
+      lastValidBlockHeight, // Letzte gültige Blockhöhe
+    };
+
+    await connection.confirmTransaction(confirmationStrategy);
+
+    // Rückgabe des PublicKeys des neuen Kontos
+    return lotteryAccount;
+  };
+
+  const getProgramAccount = useQuery({
+    queryKey: ["get-program-account", { cluster }],
+    queryFn: () => connection.getParsedAccountInfo(programId),
+  });
+
+  const createLottery = useMutation<string, Error, CreateLotteryArgs>({
+    mutationKey: ["lotteryEntry", "create", { cluster }],
+    mutationFn: async ({ ticket_price, oracle_pubkey }) => {
+      console.log("Hello from Lottery creation");
+      const lottery = web3.Keypair.generate();
+      const lottery_admin = web3.Keypair.generate();
+
+      await provider.connection.requestAirdrop(
+        lottery.publicKey,
+        2 * LAMPORTS_PER_SOL,
+      );
+      await provider.connection.requestAirdrop(
+        lottery_admin.publicKey,
+        2 * LAMPORTS_PER_SOL,
+      );
+      return await program.methods
+        .initialiseLottery(ticket_price, oracle_pubkey)
+        .accounts({
+          lottery: lottery.publicKey,
+          admin: lottery_admin.publicKey,
+        })
+        .signers([lottery, lottery_admin])
+        .rpc();
+    },
+    onSuccess: (signature) => {
+      transactionToast(signature);
+      accounts.refetch();
+    },
+    onError: (error) => {
+      toast.error(`Failed to create journal entry: ${error.message}`);
+    },
+  });
+  interface BuyTicketArgs {
+    lottery: PublicKey;
+  }
+  
+  const buyTicket = useMutation<string, Error, BuyTicketArgs>({
+    mutationKey: ["buyticket", "buy", { cluster }],
+    mutationFn: async ({ lottery }) => {
+      const player = web3.Keypair.generate();
+  
+      // Request airdrop to fund the player
+      await provider.connection.requestAirdrop(
+        player.publicKey,
+        2 * LAMPORTS_PER_SOL,
+      );
+      let startBalancePlayer: number = await provider.connection.getBalance(
+        player.publicKey
+      );
+  
+      // Fetch the current state of the lottery
+      const lotteryState = await program.account.lottery.fetch(lottery);
+  
+      // Get the current lottery index
+      const idx = lotteryState.count;
+  
+      // Construct a buffer containing the latest index
+      const buf1 = Buffer.alloc(4);
+      buf1.writeUIntBE(idx, 0, 4);
+  
+      // Create the PDA for the ticket account
+      const [ticketAccountAddress, bumpPDA] = await PublicKey.findProgramAddress(
+        [buf1, lottery.toBytes()],
+        program.programId
+      );
+  
+      // Buy the ticket by calling the smart contract
+      const buyTx = await program.methods
+        .buyTicket()
+        .accounts({
+          lottery: lottery,
+          buyer: player.publicKey,
+          ticket: ticketAccountAddress,
+          systemProgram: web3.SystemProgram.programId,
+        })
+        .signers([player])
+        .rpc();
+      
+      console.log("Buy ticket tx signature", buyTx);
+  
+      // Set up numbers for NFT minting
+      const numbersArray = [1,2,3,44,55,6];
+      console.log("Minting NFT for lottery ticket...");
+      console.log(`Numbers: ${numbersArray.join(",")}`);
+  
+      // Get lottery index
+      let idx2: number = (await program.account.lottery.fetch(lottery))
+      .count;
+
+      // Consutruct buffer containing latest index
+      const buf2 = Buffer.alloc(4);
+      buf2.writeUIntBE(idx2, 0, 4);
+      // Derive the PDA for the NFT mint
+      const [ticketPda, bump] = PublicKey.findProgramAddressSync(
+        [Buffer.from(new Uint8Array(numbersArray)), buf2],
+        program.programId
+      );
+  
+      // Derive the associated token address for the NFT
+      const tokenAddress = await getAssociatedTokenAddress(
+        ticketPda, // Mint address (PDA for the NFT)
+        player.publicKey, // Owner's public key
+        false // Allow owner off curve (usually false)
+      );
+  
+      // Check if the PDA already exists
+      const accountInfo = await provider.connection.getAccountInfo(ticketPda);
+      if (accountInfo) {
+        console.log(`Ticket with numbers: ${numbersArray.join(",")} already exists.`);
+        throw new Error('Ticket with chosen numbers already exists. Choose different numbers.');
+      }
+  
+      // Mint the ticket as an NFT
+      const mintTx = await program.methods
+        .mintTicket(numbersArray, bump)
+        .accounts({
+          mintAccount: ticketPda,
+          payer: player.publicKey,
+          tokenAccount: tokenAddress,
+          ticket: ticketAccountAddress,
+          lottery: lottery,
+        })
+        .signers([player])
+        .rpc();
+      
+      console.log("Mint NFT tx signature", mintTx);
+      let endBalanacePlayer: number = await provider.connection.getBalance(
+        player.publicKey
+      );
+      console.log("Initial :", startBalancePlayer);
+      console.log("Final :", endBalanacePlayer);
+    },
+    onSuccess: (signature) => {
+      transactionToast(signature);
+      accounts.refetch();
+    },
+    onError: (error) => {
+      toast.error(`Failed to buy and mint ticket: ${error.message}`);
+    },
+  });
+  
+  return {
+    program,
+    programId,
+    accounts,
+    getProgramAccount,
+    createLottery,
+    buyTicket,
+  };
+//  interface BuyTicketArgs {
+//    lottery: PublicKey;
+//  }
+//
+//  const buyTicket = useMutation<string, Error, BuyTicketArgs>({
+//    mutationKey: ["buyticket", "buy", { cluster }],
+//    mutationFn: async ({ lottery }) => {
+//      const player = web3.Keypair.generate();
+//      await provider.connection.requestAirdrop(
+//        player.publicKey,
+//        2 * LAMPORTS_PER_SOL,
+//      );
+//      // //const idx = (await program.account.lottery.fetch(lottery)).count
+//      // const idx = 0;
+//      // console.log("Number of tickets", idx);
+//      // // Consutruct buffer containing latest index
+//      // const buf1 = Buffer.alloc(4);
+//      // buf1.writeUIntBE(idx, 0, 4);
+//      // // Get lottery ticket
+//
+//      return await program.methods
+//        .buyTicket()
+//        .accounts({
+//          lottery: lottery,
+//          buyer: player.publicKey,
+//        })
+//        .signers([player])
+//        .rpc();
+//
+//    },
+//    onSuccess: (signature) => {
+//      transactionToast(signature);
+//      accounts.refetch();
+//    },
+//    onError: (error) => {
+//      toast.error(`Failed to buy ticket: ${error.message}`);
+//    },
+//  });
+//
+//
+//  return {
+//    program,
+//    programId,
+//    accounts,
+//    getProgramAccount,
+//    createLottery,
+//    buyTicket,
+//  };
+}
+
+export function useLotteryProgramAccount({ account }: { account: PublicKey }) {
+  const { cluster } = useCluster();
+
+  const { program } = useLotteryProgram();
+
+  const accountQuery = useQuery({
+    queryKey: ["lottery", "fetch", { cluster, account }],
+    queryFn: () => program.account.lottery.fetch(account),
+  });
+
+  return {
+    accountQuery,
+  };
+}
 
 export function useGetSignatures({ address }: { address: PublicKey }) {
   const { connection } = useConnection();
@@ -36,6 +328,23 @@ export function useGetSignatures({ address }: { address: PublicKey }) {
   return useQuery({
     queryKey: ["get-signatures", { endpoint: connection.rpcEndpoint, address }],
     queryFn: () => connection.getSignaturesForAddress(address),
+  });
+}
+
+export function useGetProgramAccounts({ address }: { address: PublicKey }) {
+  const { connection } = useConnection();
+
+  return useQuery({
+    queryKey: [
+      "get-program-accounts",
+      { endpoint: connection.rpcEndpoint, address },
+    ],
+    queryFn: async () => {
+      const [programAccounts] = await Promise.all([
+        connection.getProgramAccounts(address),
+      ]);
+      return [...programAccounts];
+    },
   });
 }
 
